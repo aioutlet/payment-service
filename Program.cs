@@ -145,8 +145,8 @@ app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Health checks
-app.MapHealthChecks("/health");
+// Health checks mapped through operational controller
+// app.MapHealthChecks("/health"); // Replaced with operational controller
 
 // Controllers
 app.MapControllers();
