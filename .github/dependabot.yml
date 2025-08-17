@@ -1,0 +1,124 @@
+# Dependabot configuration for payment-service
+# This configuration will automatically check for dependency updates
+# and create pull requests when new versions are available.
+#
+# For more information, see:
+# https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
+
+version: 2
+updates:
+  # Enable version updates for NuGet packages
+  - package-ecosystem: 'nuget'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
+      timezone: 'Etc/UTC'
+    open-pull-requests-limit: 10
+    assignees:
+      - 'payment-service-team'
+    commit-message:
+      prefix: 'deps'
+      include: 'scope'
+    labels:
+      - 'dependencies'
+    # Group related updates together to reduce PR noise
+    groups:
+      # Group ASP.NET Core packages
+      aspnetcore-ecosystem:
+        patterns:
+          - 'Microsoft.AspNetCore.*'
+        update-types:
+          - 'minor'
+          - 'patch'
+      # Group Entity Framework Core packages
+      entityframework-ecosystem:
+        patterns:
+          - 'Microsoft.EntityFrameworkCore*'
+        update-types:
+          - 'minor'
+          - 'patch'
+      # Group JWT and authentication packages
+      auth-ecosystem:
+        patterns:
+          - 'Microsoft.AspNetCore.Authentication.JwtBearer'
+          - 'Microsoft.IdentityModel.Tokens'
+          - 'System.IdentityModel.Tokens.Jwt'
+        update-types:
+          - 'minor'
+          - 'patch'
+      # Group payment provider packages
+      payment-providers:
+        patterns:
+          - 'Stripe.net'
+          - 'PayPalCheckoutSdk'
+        update-types:
+          - 'minor'
+          - 'patch'
+      # Group validation packages
+      validation-ecosystem:
+        patterns:
+          - 'FluentValidation*'
+        update-types:
+          - 'minor'
+          - 'patch'
+      # Group logging packages
+      logging-ecosystem:
+        patterns:
+          - 'Serilog*'
+        update-types:
+          - 'minor'
+          - 'patch'
+      # Group messaging packages
+      messaging-ecosystem:
+        patterns:
+          - 'RabbitMQ.Client'
+        update-types:
+          - 'minor'
+          - 'patch'
+      # Group API and health check packages
+      api-health:
+        patterns:
+          - 'Swashbuckle.AspNetCore'
+          - 'Microsoft.AspNetCore.OpenApi'
+          - 'Microsoft.Extensions.Diagnostics.HealthChecks*'
+          - 'Microsoft.AspNetCore.Mvc.Versioning'
+        update-types:
+          - 'minor'
+          - 'patch'
+
+  # Enable version updates for Docker
+  - package-ecosystem: 'docker'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
+      timezone: 'Etc/UTC'
+    open-pull-requests-limit: 5
+    assignees:
+      - 'payment-service-team'
+    commit-message:
+      prefix: 'docker'
+      include: 'scope'
+    labels:
+      - 'docker'
+      - 'infrastructure'
+
+  # Enable version updates for GitHub Actions (if any workflows are added later)
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'monthly'
+      day: 'monday'
+      time: '09:00'
+      timezone: 'Etc/UTC'
+    open-pull-requests-limit: 5
+    assignees:
+      - 'payment-service-team'
+    commit-message:
+      prefix: 'ci'
+      include: 'scope'
+    labels:
+      - 'github-actions'
