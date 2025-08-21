@@ -3,25 +3,21 @@ version: '3.8'
 services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: ${SERVICE_NAME:-payment-service}-sqlserver-${ASPNETCORE_ENVIRONMENT:-Development}
+    container_name: payment-service-sqlserver-dev
     restart: unless-stopped
     environment:
-      SA_PASSWORD: ${DB_PASSWORD:-SqlServer_Dev_Pass123!}
+      SA_PASSWORD: SqlServer_Dev_Pass123!
       ACCEPT_EULA: 'Y'
       MSSQL_PID: 'Express'
     ports:
-      - '${DB_PORT:-1433}:1433'
+      - '1434:1433' # Use different port to avoid conflicts
     volumes:
       - sqlserver_data:/var/opt/mssql
       - ./database/scripts:/docker-entrypoint-initdb.d:ro
     networks:
-      - payment-network
+      - aioutlet-network
     healthcheck:
-      test:
-        [
-          'CMD-SHELL',
-          "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${DB_PASSWORD:-SqlServer_Dev_Pass123!} -Q 'SELECT 1'",
-        ]
+      test: ['CMD-SHELL', "timeout 10s bash -c '</dev/tcp/localhost/1433'"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -31,30 +27,31 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ${SERVICE_NAME:-payment-service}-${ASPNETCORE_ENVIRONMENT:-Development}
+    container_name: payment-service-dev
     restart: unless-stopped
     ports:
-      - '${SERVICE_PORT:-7000}:80'
-      - '${SERVICE_HTTPS_PORT:-7001}:443'
+      - '8084:80' # Consistent port pattern
+      - '8085:443'
     environment:
-      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Development}
+      - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:80;https://+:443
-      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=${DB_NAME:-PaymentServiceDb_Dev};User Id=sa;Password=${DB_PASSWORD:-SqlServer_Dev_Pass123!};TrustServerCertificate=True;
-      - RabbitMQ__ConnectionString=${RABBITMQ_CONNECTION_STRING:-amqp://admin:admin123@host.docker.internal:5672/}
-      - JWT__Secret=${JWT_SECRET:-payment-service-jwt-secret-development}
-      - JWT__Issuer=${JWT_ISSUER:-aioutlet-auth-service}
-      - JWT__Audience=${JWT_AUDIENCE:-aioutlet-payment-service}
-      - PaymentGateway__ApiKey=${PAYMENT_GATEWAY_API_KEY:-dev_api_key}
-      - PaymentGateway__SecretKey=${PAYMENT_GATEWAY_SECRET_KEY:-dev_secret_key}
-      - ServiceDiscovery__OrderServiceUrl=${ORDER_SERVICE_URL:-http://host.docker.internal:3005}
-      - ServiceDiscovery__NotificationServiceUrl=${NOTIFICATION_SERVICE_URL:-http://host.docker.internal:3008}
+      - DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=PaymentServiceDb_Dev;User Id=sa;Password=SqlServer_Dev_Pass123!;TrustServerCertificate=True;
+      - RabbitMQ__ConnectionString=amqp://admin:admin123@aioutlet-rabbitmq:5672/
+      - JWT__Secret=payment-service-jwt-secret-development
+      - JWT__Issuer=aioutlet-auth-service
+      - JWT__Audience=aioutlet-payment-service
+      - PaymentGateway__ApiKey=dev_api_key
+      - PaymentGateway__SecretKey=dev_secret_key
+      - ServiceDiscovery__OrderServiceUrl=http://order-service-dev:80
+      - ServiceDiscovery__NotificationServiceUrl=http://notification-service-dev:80
     depends_on:
       sqlserver:
         condition: service_healthy
     volumes:
       - ./logs:/app/logs
     networks:
-      - payment-network
+      - aioutlet-network
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost/health']
       interval: 30s
@@ -67,5 +64,5 @@ volumes:
     driver: local
 
 networks:
-  payment-network:
-    driver: bridge
+  aioutlet-network:
+    external: true
