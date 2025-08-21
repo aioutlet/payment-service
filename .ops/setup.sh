@@ -356,6 +356,27 @@ main() {
         echo "✅ Payment Service setup completed successfully!"
         echo "=========================================="
         echo ""
+        
+        # Start services with Docker Compose
+        echo "🐳 Starting services with Docker Compose..."
+        if docker-compose up -d; then
+            echo "✅ Services started successfully"
+            echo ""
+            echo "⏳ Waiting for services to be ready..."
+            sleep 15
+            
+            # Check service health
+            if docker-compose ps | grep -q "Up.*healthy\|Up"; then
+                echo "✅ Services are healthy and ready"
+            else
+                echo "⚠️  Services may still be starting up"
+            fi
+        else
+            echo "❌ Failed to start services with Docker Compose"
+            return 1
+        fi
+        echo ""
+        
         echo "💳 Setup Summary:"
         echo "  • Environment: $ASPNET_ENVIRONMENT"
         echo "  • Configuration: $(basename "$APPSETTINGS_FILE")"
@@ -370,17 +391,10 @@ main() {
         echo "  • Refund Management"
         echo "  • Webhook Support"
         echo ""
-        echo "🚀 Next Steps:"
-        echo "  1. Configure payment gateway credentials in $APPSETTINGS_FILE"
-        echo "  2. Set up webhook endpoints for payment providers"
-        echo "  3. Start the service: dotnet run"
-        echo "  4. Run tests: dotnet test"
-        echo "  5. Check health: curl http://localhost:3004/health"
-        echo ""
-        echo "📝 Configuration Note:"
-        echo "  This .NET service uses appsettings.json files for configuration."
-        echo "  Environment-specific settings are in appsettings.\$ENVIRONMENT.json"
-        echo "  Set ASPNETCORE_ENVIRONMENT=$ASPNET_ENVIRONMENT when running the service"
+        echo "🚀 Service is now running:"
+        echo "  • View status: docker-compose ps"
+        echo "  • View logs: docker-compose logs -f"
+        echo "  • Stop services: bash .ops/teardown.sh"
         echo ""
     else
         echo "❌ Setup validation failed"

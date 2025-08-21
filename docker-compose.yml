@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: ${SERVICE_NAME:-payment-service}-sqlserver-${ASPNETCORE_ENVIRONMENT:-Development}
+    restart: unless-stopped
+    environment:
+      SA_PASSWORD: ${DB_PASSWORD:-SqlServer_Dev_Pass123!}
+      ACCEPT_EULA: 'Y'
+      MSSQL_PID: 'Express'
+    ports:
+      - '${DB_PORT:-1433}:1433'
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+      - ./database/scripts:/docker-entrypoint-initdb.d:ro
+    networks:
+      - payment-network
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${DB_PASSWORD:-SqlServer_Dev_Pass123!} -Q 'SELECT 1'",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${SERVICE_NAME:-payment-service}-${ASPNETCORE_ENVIRONMENT:-Development}
+    restart: unless-stopped
+    ports:
+      - '${SERVICE_PORT:-7000}:80'
+      - '${SERVICE_HTTPS_PORT:-7001}:443'
+    environment:
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Development}
+      - ASPNETCORE_URLS=http://+:80;https://+:443
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=${DB_NAME:-PaymentServiceDb_Dev};User Id=sa;Password=${DB_PASSWORD:-SqlServer_Dev_Pass123!};TrustServerCertificate=True;
+      - RabbitMQ__ConnectionString=${RABBITMQ_CONNECTION_STRING:-amqp://admin:admin123@host.docker.internal:5672/}
+      - JWT__Secret=${JWT_SECRET:-payment-service-jwt-secret-development}
+      - JWT__Issuer=${JWT_ISSUER:-aioutlet-auth-service}
+      - JWT__Audience=${JWT_AUDIENCE:-aioutlet-payment-service}
+      - PaymentGateway__ApiKey=${PAYMENT_GATEWAY_API_KEY:-dev_api_key}
+      - PaymentGateway__SecretKey=${PAYMENT_GATEWAY_SECRET_KEY:-dev_secret_key}
+      - ServiceDiscovery__OrderServiceUrl=${ORDER_SERVICE_URL:-http://host.docker.internal:3005}
+      - ServiceDiscovery__NotificationServiceUrl=${NOTIFICATION_SERVICE_URL:-http://host.docker.internal:3008}
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - payment-network
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  sqlserver_data:
+    driver: local
+
+networks:
+  payment-network:
+    driver: bridge
