@@ -15,13 +15,13 @@ public class PaymentService : IPaymentService
     private readonly PaymentDbContext _dbContext;
     private readonly IPaymentProviderFactory _providerFactory;
     private readonly ICurrentUserService _currentUserService;
-    private readonly ILogger<PaymentService> _logger;
+    private readonly StandardLogger _logger;
 
     public PaymentService(
         PaymentDbContext dbContext,
         IPaymentProviderFactory providerFactory,
         ICurrentUserService currentUserService,
-        ILogger<PaymentService> logger)
+        StandardLogger logger)
     {
         _dbContext = dbContext;
         _providerFactory = providerFactory;
@@ -34,14 +34,27 @@ public class PaymentService : IPaymentService
         var correlationId = CorrelationIdHelper.GetCorrelationId();
         var currentUserId = _currentUserService.UserId;
 
-        _logger.LogInformation("Processing payment for order {OrderId} by user {UserId} [CorrelationId: {CorrelationId}]", 
-            request.OrderId, currentUserId, correlationId);
+        var stopwatch = _logger.OperationStart("PROCESS_PAYMENT", correlationId, new {
+            operation = "PROCESS_PAYMENT",
+            orderId = request.OrderId,
+            customerId = request.CustomerId,
+            amount = request.Amount,
+            currency = request.Currency,
+            paymentMethod = request.PaymentMethod,
+            paymentProvider = request.PaymentProvider,
+            userId = currentUserId
+        });
 
         try
         {
             // Validate request
             if (string.IsNullOrWhiteSpace(request.OrderId))
             {
+                _logger.Warn("Payment validation failed: Order ID is required", correlationId, new {
+                    operation = "PROCESS_PAYMENT",
+                    validationError = "missing_order_id"
+                });
+                
                 return new PaymentResultDto
                 {
                     IsSuccess = false,
@@ -51,6 +64,12 @@ public class PaymentService : IPaymentService
 
             if (request.Amount <= 0)
             {
+                _logger.Warn("Payment validation failed: Payment amount must be greater than zero", correlationId, new {
+                    operation = "PROCESS_PAYMENT",
+                    amount = request.Amount,
+                    validationError = "invalid_amount"
+                });
+                
                 return new PaymentResultDto
                 {
                     IsSuccess = false,
@@ -65,8 +84,12 @@ public class PaymentService : IPaymentService
 
             if (existingPayment != null)
             {
-                _logger.LogWarning("Duplicate payment attempt for order {OrderId} [CorrelationId: {CorrelationId}]", 
-                    request.OrderId, correlationId);
+                _logger.Warn("Duplicate payment attempt detected", correlationId, new {
+                    operation = "PROCESS_PAYMENT",
+                    orderId = request.OrderId,
+                    existingPaymentId = existingPayment.Id,
+                    duplicateError = "payment_already_exists"
+                });
                 
                 return new PaymentResultDto
                 {
@@ -90,6 +113,12 @@ public class PaymentService : IPaymentService
                 provider = _providerFactory.GetDefaultProvider();
             }
 
+            _logger.Info("Payment provider selected", correlationId, new {
+                operation = "PROCESS_PAYMENT",
+                providerName = provider.ProviderName,
+                paymentMethod = request.PaymentMethod
+            });
+
             // Create payment record
             var payment = new Payment
             {
@@ -112,8 +141,12 @@ public class PaymentService : IPaymentService
             _dbContext.Payments.Add(payment);
             await _dbContext.SaveChangesAsync();
 
-            _logger.LogInformation("Payment record created with ID {PaymentId} [CorrelationId: {CorrelationId}]", 
-                payment.Id, correlationId);
+            _logger.Info("Payment record created", correlationId, new {
+                operation = "PROCESS_PAYMENT",
+                paymentId = payment.Id,
+                providerName = provider.ProviderName,
+                status = payment.Status
+            });
 
             // Process payment with provider
             var providerResult = await provider.ProcessPaymentAsync(request, correlationId);
@@ -143,8 +176,27 @@ public class PaymentService : IPaymentService
 
             await _dbContext.SaveChangesAsync();
 
-            _logger.LogInformation("Payment {PaymentId} updated with provider result. Success: {IsSuccess}, Status: {Status} [CorrelationId: {CorrelationId}]", 
-                payment.Id, providerResult.IsSuccess, providerResult.Status, correlationId);
+            _logger.OperationComplete("PROCESS_PAYMENT", stopwatch, correlationId, new {
+                paymentId = payment.Id,
+                providerTransactionId = payment.ProviderTransactionId,
+                status = payment.Status,
+                isSuccess = providerResult.IsSuccess,
+                amount = payment.Amount,
+                currency = payment.Currency
+            });
+
+            if (providerResult.IsSuccess)
+            {
+                _logger.Business("PAYMENT_PROCESSED", correlationId, new {
+                    paymentId = payment.Id,
+                    orderId = payment.OrderId,
+                    customerId = payment.CustomerId,
+                    amount = payment.Amount,
+                    currency = payment.Currency,
+                    provider = payment.Provider,
+                    paymentMethod = payment.PaymentMethod
+                });
+            }
 
             return new PaymentResultDto
             {
@@ -162,8 +214,11 @@ public class PaymentService : IPaymentService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing payment for order {OrderId} [CorrelationId: {CorrelationId}]", 
-                request.OrderId, correlationId);
+            _logger.OperationFailed("PROCESS_PAYMENT", stopwatch, ex, correlationId, new {
+                orderId = request.OrderId,
+                customerId = request.CustomerId,
+                amount = request.Amount
+            });
 
             return new PaymentResultDto
             {
@@ -178,8 +233,13 @@ public class PaymentService : IPaymentService
         var correlationId = CorrelationIdHelper.GetCorrelationId();
         var currentUserId = _currentUserService.UserId;
 
-        _logger.LogInformation("Processing refund for payment {PaymentId} by user {UserId} [CorrelationId: {CorrelationId}]", 
-            request.PaymentId, currentUserId, correlationId);
+        var stopwatch = _logger.OperationStart("PROCESS_REFUND", correlationId, new {
+            operation = "PROCESS_REFUND",
+            paymentId = request.PaymentId,
+            refundAmount = request.Amount,
+            reason = request.Reason,
+            userId = currentUserId
+        });
 
         try
         {
@@ -189,6 +249,12 @@ public class PaymentService : IPaymentService
 
             if (payment == null)
             {
+                _logger.Warn("Refund validation failed: Payment not found", correlationId, new {
+                    operation = "PROCESS_REFUND",
+                    paymentId = request.PaymentId,
+                    validationError = "payment_not_found"
+                });
+                
                 return new RefundResultDto
                 {
                     IsSuccess = false,
@@ -198,6 +264,13 @@ public class PaymentService : IPaymentService
 
             if (payment.Status != PaymentStatus.Succeeded)
             {
+                _logger.Warn("Refund validation failed: Payment not successful", correlationId, new {
+                    operation = "PROCESS_REFUND",
+                    paymentId = request.PaymentId,
+                    paymentStatus = payment.Status,
+                    validationError = "payment_not_successful"
+                });
+                
                 return new RefundResultDto
                 {
                     IsSuccess = false,
@@ -215,6 +288,15 @@ public class PaymentService : IPaymentService
 
             if (totalRefunded + refundAmount > payment.Amount)
             {
+                _logger.Warn("Refund validation failed: Amount exceeds available balance", correlationId, new {
+                    operation = "PROCESS_REFUND",
+                    paymentId = request.PaymentId,
+                    requestedAmount = refundAmount,
+                    totalRefunded = totalRefunded,
+                    paymentAmount = payment.Amount,
+                    validationError = "amount_exceeds_balance"
+                });
+                
                 return new RefundResultDto
                 {
                     IsSuccess = false,
@@ -225,27 +307,38 @@ public class PaymentService : IPaymentService
             // Get payment provider
             var provider = _providerFactory.GetProvider(payment.Provider);
 
+            _logger.Info("Processing refund with provider", correlationId, new {
+                operation = "PROCESS_REFUND",
+                paymentId = payment.Id,
+                refundAmount = refundAmount,
+                provider = payment.Provider
+            });
+
             // Create refund record
             var refund = new PaymentRefund
             {
                 PaymentId = payment.Id,
                 Amount = refundAmount,
-                Currency = payment.Currency,
                 Reason = request.Reason,
-                Status = RefundStatus.Processing,
+                Status = RefundStatus.Pending,
                 CreatedBy = currentUserId,
                 Metadata = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object>
                 {
                     ["correlation_id"] = correlationId,
-                    ["user_id"] = currentUserId
+                    ["user_id"] = currentUserId,
+                    ["original_payment_id"] = payment.Id
                 })
             };
 
             _dbContext.PaymentRefunds.Add(refund);
             await _dbContext.SaveChangesAsync();
 
-            _logger.LogInformation("Refund record created with ID {RefundId} [CorrelationId: {CorrelationId}]", 
-                refund.Id, correlationId);
+            _logger.Info("Refund record created", correlationId, new {
+                operation = "PROCESS_REFUND",
+                refundId = refund.Id,
+                paymentId = payment.Id,
+                amount = refundAmount
+            });
 
             // Process refund with provider
             var providerResult = await provider.ProcessRefundAsync(payment, refundAmount, request.Reason ?? "Refund requested", correlationId);
@@ -255,7 +348,7 @@ public class PaymentService : IPaymentService
             refund.Status = providerResult.Status;
             refund.FailureReason = providerResult.FailureReason;
             
-            // Merge metadata
+            // Merge metadata if available
             if (providerResult.Metadata != null)
             {
                 var existingMetadata = string.IsNullOrEmpty(refund.Metadata) 
@@ -275,26 +368,46 @@ public class PaymentService : IPaymentService
 
             await _dbContext.SaveChangesAsync();
 
-            _logger.LogInformation("Refund {RefundId} updated with provider result. Success: {IsSuccess}, Status: {Status} [CorrelationId: {CorrelationId}]", 
-                refund.Id, providerResult.IsSuccess, providerResult.Status, correlationId);
+            _logger.OperationComplete("PROCESS_REFUND", stopwatch, correlationId, new {
+                refundId = refund.Id,
+                paymentId = payment.Id,
+                amount = refundAmount,
+                status = refund.Status,
+                isSuccess = providerResult.IsSuccess
+            });
+
+            if (providerResult.IsSuccess)
+            {
+                _logger.Business("REFUND_PROCESSED", correlationId, new {
+                    refundId = refund.Id,
+                    paymentId = payment.Id,
+                    orderId = payment.OrderId,
+                    customerId = payment.CustomerId,
+                    amount = refundAmount,
+                    currency = payment.Currency,
+                    provider = payment.Provider,
+                    reason = request.Reason
+                });
+            }
 
             return new RefundResultDto
             {
                 RefundId = refund.Id.ToString(),
                 PaymentId = payment.Id.ToString(),
-                ProviderRefundId = providerResult.ProviderRefundId,
-                Status = providerResult.Status,
+                Amount = refundAmount,
+                Currency = payment.Currency,
+                Status = refund.Status,
                 IsSuccess = providerResult.IsSuccess,
                 ErrorMessage = providerResult.FailureReason,
-                Amount = refund.Amount,
-                Currency = refund.Currency,
                 ProcessedAt = refund.UpdatedAt
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing refund for payment {PaymentId} [CorrelationId: {CorrelationId}]", 
-                request.PaymentId, correlationId);
+            _logger.OperationFailed("PROCESS_REFUND", stopwatch, ex, correlationId, new {
+                paymentId = request.PaymentId,
+                refundAmount = request.Amount
+            });
 
             return new RefundResultDto
             {
@@ -309,8 +422,14 @@ public class PaymentService : IPaymentService
         var correlationId = CorrelationIdHelper.GetCorrelationId();
         var currentUserId = _currentUserService.UserId;
 
-        _logger.LogInformation("Saving payment method for customer {CustomerId} by user {UserId} [CorrelationId: {CorrelationId}]", 
-            request.CustomerId, currentUserId, correlationId);
+        var stopwatch = _logger.OperationStart("SAVE_PAYMENT_METHOD", correlationId, new {
+            operation = "SAVE_PAYMENT_METHOD",
+            customerId = request.CustomerId,
+            paymentMethodType = request.PaymentMethodType,
+            paymentProvider = request.PaymentProvider,
+            isDefault = request.IsDefault,
+            userId = currentUserId
+        });
 
         try
         {
@@ -319,11 +438,24 @@ public class PaymentService : IPaymentService
                 ? _providerFactory.GetProvider(request.PaymentProvider)
                 : _providerFactory.GetDefaultProvider();
 
+            _logger.Info("Saving payment method with provider", correlationId, new {
+                operation = "SAVE_PAYMENT_METHOD",
+                provider = provider.ProviderName,
+                customerId = request.CustomerId
+            });
+
             // Save payment method with provider
             var providerResult = await provider.SavePaymentMethodAsync(request, correlationId);
 
             if (!providerResult.IsSuccess)
             {
+                _logger.Warn("Provider failed to save payment method", correlationId, new {
+                    operation = "SAVE_PAYMENT_METHOD",
+                    provider = provider.ProviderName,
+                    customerId = request.CustomerId,
+                    error = providerResult.FailureReason
+                });
+                
                 return new SavePaymentMethodResultDto
                 {
                     IsSuccess = false,
@@ -365,8 +497,19 @@ public class PaymentService : IPaymentService
             _dbContext.PaymentMethods.Add(paymentMethod);
             await _dbContext.SaveChangesAsync();
 
-            _logger.LogInformation("Payment method saved with ID {PaymentMethodId} [CorrelationId: {CorrelationId}]", 
-                paymentMethod.Id, correlationId);
+            _logger.OperationComplete("SAVE_PAYMENT_METHOD", stopwatch, correlationId, new {
+                paymentMethodId = paymentMethod.Id,
+                customerId = request.CustomerId,
+                provider = provider.ProviderName,
+                isDefault = request.IsDefault
+            });
+
+            _logger.Business("PAYMENT_METHOD_SAVED", correlationId, new {
+                paymentMethodId = paymentMethod.Id,
+                customerId = request.CustomerId,
+                provider = provider.ProviderName,
+                paymentMethodType = request.PaymentMethodType
+            });
 
             return new SavePaymentMethodResultDto
             {
@@ -382,8 +525,10 @@ public class PaymentService : IPaymentService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error saving payment method for customer {CustomerId} [CorrelationId: {CorrelationId}]", 
-                request.CustomerId, correlationId);
+            _logger.OperationFailed("SAVE_PAYMENT_METHOD", stopwatch, ex, correlationId, new {
+                customerId = request.CustomerId,
+                paymentMethodType = request.PaymentMethodType
+            });
 
             return new SavePaymentMethodResultDto
             {
@@ -398,8 +543,7 @@ public class PaymentService : IPaymentService
         var correlationId = CorrelationIdHelper.GetCorrelationId();
         var currentUserId = _currentUserService.UserId;
 
-        _logger.LogInformation("Deleting payment method {PaymentMethodId} by user {UserId} [CorrelationId: {CorrelationId}]", 
-            paymentMethodId, currentUserId, correlationId);
+        _logger.Info("Deleting payment method", correlationId);
 
         try
         {
@@ -408,8 +552,7 @@ public class PaymentService : IPaymentService
 
             if (paymentMethod == null)
             {
-                _logger.LogWarning("Payment method {PaymentMethodId} not found [CorrelationId: {CorrelationId}]", 
-                    paymentMethodId, correlationId);
+                _logger.Warn("Payment method not found", correlationId);
                 return false;
             }
 
@@ -419,23 +562,20 @@ public class PaymentService : IPaymentService
 
             if (!providerDeleted)
             {
-                _logger.LogWarning("Failed to delete payment method from provider {Provider} [CorrelationId: {CorrelationId}]", 
-                    paymentMethod.Provider, correlationId);
+                _logger.Warn("Failed to delete payment method from provider", correlationId);
             }
 
             // Delete from database regardless of provider response
             _dbContext.PaymentMethods.Remove(paymentMethod);
             await _dbContext.SaveChangesAsync();
 
-            _logger.LogInformation("Payment method {PaymentMethodId} deleted [CorrelationId: {CorrelationId}]", 
-                paymentMethodId, correlationId);
+            _logger.Info("Payment method deleted", correlationId);
 
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting payment method {PaymentMethodId} [CorrelationId: {CorrelationId}]", 
-                paymentMethodId, correlationId);
+            _logger.Error("Error deleting payment method", ex, correlationId);
             return false;
         }
     }
@@ -444,8 +584,7 @@ public class PaymentService : IPaymentService
     {
         var correlationId = CorrelationIdHelper.GetCorrelationId();
 
-        _logger.LogInformation("Getting payment methods for customer {CustomerId} [CorrelationId: {CorrelationId}]", 
-            customerId, correlationId);
+        _logger.Info("Getting payment methods for customer", correlationId);
 
         try
         {
@@ -467,15 +606,13 @@ public class PaymentService : IPaymentService
                 })
                 .ToListAsync();
 
-            _logger.LogInformation("Found {Count} payment methods for customer {CustomerId} [CorrelationId: {CorrelationId}]", 
-                paymentMethods.Count, customerId, correlationId);
+            _logger.Info("Found payment methods for customer", correlationId);
 
             return paymentMethods;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting payment methods for customer {CustomerId} [CorrelationId: {CorrelationId}]", 
-                customerId, correlationId);
+            _logger.Error("Error getting payment methods for customer", ex, correlationId);
             return new List<PaymentMethodDto>();
         }
     }
@@ -484,8 +621,7 @@ public class PaymentService : IPaymentService
     {
         var correlationId = CorrelationIdHelper.GetCorrelationId();
 
-        _logger.LogInformation("Getting payment {PaymentId} [CorrelationId: {CorrelationId}]", 
-            paymentId, correlationId);
+        _logger.Info("Getting payment", correlationId);
 
         try
         {
@@ -495,8 +631,7 @@ public class PaymentService : IPaymentService
 
             if (payment == null)
             {
-                _logger.LogWarning("Payment {PaymentId} not found [CorrelationId: {CorrelationId}]", 
-                    paymentId, correlationId);
+                _logger.Warn("Payment not found", correlationId);
                 return null;
             }
 
@@ -529,8 +664,7 @@ public class PaymentService : IPaymentService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting payment {PaymentId} [CorrelationId: {CorrelationId}]", 
-                paymentId, correlationId);
+            _logger.Error("Error getting payment", ex, correlationId);
             return null;
         }
     }
@@ -539,8 +673,7 @@ public class PaymentService : IPaymentService
     {
         var correlationId = CorrelationIdHelper.GetCorrelationId();
 
-        _logger.LogInformation("Getting payments - CustomerId: {CustomerId}, OrderId: {OrderId}, Skip: {Skip}, Take: {Take} [CorrelationId: {CorrelationId}]", 
-            customerId, orderId, skip, take, correlationId);
+        _logger.Info("Getting payments", correlationId);
 
         try
         {
@@ -588,14 +721,13 @@ public class PaymentService : IPaymentService
                 })
                 .ToListAsync();
 
-            _logger.LogInformation("Found {Count} payments [CorrelationId: {CorrelationId}]", 
-                payments.Count, correlationId);
+            _logger.Info("Found payments", correlationId);
 
             return payments;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting payments [CorrelationId: {CorrelationId}]", correlationId);
+            _logger.Error("Error getting payments", ex, correlationId);
             return new List<PaymentDto>();
         }
     }
