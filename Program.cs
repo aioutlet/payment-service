@@ -97,6 +97,7 @@ builder.Services.AddHttpContextAccessor();
 
 // Application Services
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddScoped<IStandardLogger, StandardLogger>();
 builder.Services.AddScoped<IPaymentService, PaymentService.Services.PaymentService>();
 
 // Payment Providers
