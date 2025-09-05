@@ -35,7 +35,7 @@ namespace PaymentService.Utils
     /// <summary>
     /// Standardized logger for Payment Service with correlation ID and structured logging support
     /// </summary>
-    public class StandardLogger
+    public class StandardLogger : IStandardLogger
     {
         private readonly ILogger<StandardLogger> _logger;
         private readonly string _serviceName;

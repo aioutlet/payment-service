@@ -15,13 +15,13 @@ public class PaymentService : IPaymentService
     private readonly PaymentDbContext _dbContext;
     private readonly IPaymentProviderFactory _providerFactory;
     private readonly ICurrentUserService _currentUserService;
-    private readonly StandardLogger _logger;
+    private readonly IStandardLogger _logger;
 
     public PaymentService(
         PaymentDbContext dbContext,
         IPaymentProviderFactory providerFactory,
         ICurrentUserService currentUserService,
-        StandardLogger logger)
+        IStandardLogger logger)
     {
         _dbContext = dbContext;
         _providerFactory = providerFactory;
