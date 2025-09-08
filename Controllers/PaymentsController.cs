@@ -51,7 +51,8 @@ public class PaymentsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing payment for order {OrderId}", request.OrderId);
+            var safeOrderId = request.OrderId?.ToString().Replace("\r", "").Replace("\n", "");
+            _logger.LogError(ex, "Error processing payment for order {OrderId}", safeOrderId);
             return StatusCode(500, new PaymentResultDto 
             { 
                 IsSuccess = false, 
