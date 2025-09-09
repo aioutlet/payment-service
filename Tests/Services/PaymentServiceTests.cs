@@ -39,6 +39,7 @@ public class PaymentServiceTests : IDisposable
         _mockPaymentProvider.Setup(x => x.ProviderName).Returns("test-provider");
         _mockProviderFactory.Setup(x => x.GetDefaultProvider()).Returns(_mockPaymentProvider.Object);
         _mockProviderFactory.Setup(x => x.GetProvider(It.IsAny<string>())).Returns(_mockPaymentProvider.Object);
+        _mockProviderFactory.Setup(x => x.GetProviderForPaymentMethod(It.IsAny<string>())).Returns(_mockPaymentProvider.Object);
 
         // Setup current user
         _mockCurrentUserService.Setup(x => x.UserId).Returns("test-user-123");
