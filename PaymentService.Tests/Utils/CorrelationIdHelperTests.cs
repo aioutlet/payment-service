@@ -1,4 +1,5 @@
 using PaymentService.Utils;
+using System.Collections.Concurrent;
 using Xunit;
 
 namespace PaymentService.Tests.Utils;
@@ -83,7 +84,7 @@ public class CorrelationIdHelperTests
         // Arrange
         var task1CorrelationId = "task-1-correlation";
         var task2CorrelationId = "task-2-correlation";
-        var retrievedIds = new List<string>();
+        var retrievedIds = new ConcurrentBag<string>();
 
         // Act
         var task1 = Task.Run(() =>
