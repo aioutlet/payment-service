@@ -1,0 +1,18 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: payment-pubsub
+spec:
+  type: pubsub.redis
+  version: v1
+  metadata:
+    - name: redisHost
+      value: localhost:6379
+    - name: redisPassword
+      value: ''
+    - name: enableTLS
+      value: 'false'
+    - name: consumerID
+      value: payment-service
+scopes:
+  - payment-service

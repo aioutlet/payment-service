@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using PaymentService.Configuration;
 using PaymentService.Data;
+using PaymentService.Events.Publishers;
 using PaymentService.Middlewares;
 using PaymentService.Services;
 using PaymentService.Services.Providers;
@@ -18,6 +19,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers()
+    .AddDapr() // Add Dapr integration
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -104,6 +106,10 @@ builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IStandardLogger, StandardLogger>();
 builder.Services.AddScoped<IPaymentService, PaymentService.Services.PaymentService>();
 
+// Dapr Services
+builder.Services.AddSingleton<DaprEventPublisher>();
+builder.Services.AddSingleton<PaymentService.Services.DaprSecretService>();
+
 // Payment Providers
 builder.Services.AddScoped<StripeProvider>();
 builder.Services.AddScoped<PayPalProvider>();
@@ -153,6 +159,10 @@ app.UseAuthorization();
 
 // Health checks mapped through operational controller
 // app.MapHealthChecks("/health"); // Replaced with operational controller
+
+// Enable Dapr CloudEvents and subscribe handler
+app.UseCloudEvents();
+app.MapSubscribeHandler();
 
 // Controllers
 app.MapControllers();
