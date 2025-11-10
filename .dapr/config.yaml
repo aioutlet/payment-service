@@ -5,8 +5,10 @@ metadata:
 spec:
   tracing:
     samplingRate: '1'
-    zipkin:
-      endpointAddress: 'http://localhost:9411/api/v2/spans'
+    otel:
+      endpointAddress: 'http://localhost:4318'
+      isSecure: false
+      protocol: 'http'
   metric:
     enabled: true
   accessControl:
