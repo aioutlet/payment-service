@@ -151,7 +151,7 @@ if (app.Environment.IsDevelopment())
 }
 
 // Middleware pipeline
-app.UseCorrelationId();
+app.UseTraceContext();
 app.UsePaymentServiceRateLimiting(builder.Configuration);
 app.UseCors("AllowAll");
 app.UseAuthentication();
