@@ -1,0 +1,59 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/PaymentService/PaymentService.csproj",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary"
+      ],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "dapr-debug",
+      "type": "shell",
+      "command": "dapr run --app-id payment-service --app-port 1009 --dapr-http-port 3509 --dapr-grpc-port 50009 --resources-path ./.dapr --config ./.dapr/config.yaml --log-level error",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": [
+          {
+            "regexp": ".",
+            "file": 1,
+            "location": 2,
+            "message": 3
+          }
+        ],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*Starting Dapr.*",
+          "endsPattern": "^.*You're up and running!.*"
+        }
+      },
+      "dependsOn": "build"
+    },
+    {
+      "label": "dapr-down",
+      "type": "shell",
+      "command": "dapr stop --app-id payment-service"
+    },
+    {
+      "label": "Run with Dapr",
+      "type": "shell",
+      "command": "${workspaceFolder}/run.ps1",
+      "windows": {
+        "command": "${workspaceFolder}/run.ps1"
+      },
+      "linux": {
+        "command": "${workspaceFolder}/run.sh"
+      },
+      "osx": {
+        "command": "${workspaceFolder}/run.sh"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

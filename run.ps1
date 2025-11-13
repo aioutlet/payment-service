@@ -1,0 +1,58 @@
+#!/usr/bin/env pwsh
+# Payment Service - PowerShell Run Script with Dapr
+# Port: 1009, Dapr HTTP: 3509, Dapr gRPC: 50009
+
+Write-Host ""
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "Starting payment-service with Dapr..." -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host ""
+
+# Kill any existing processes on ports
+Write-Host "Cleaning up existing processes..." -ForegroundColor Yellow
+
+# Kill process on port 1009 (app port)
+$process = Get-NetTCPConnection -LocalPort 1009 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
+if ($process) {
+    Write-Host "Killing process on port 1009 (PID: $process)" -ForegroundColor Yellow
+    Stop-Process -Id $process -Force -ErrorAction SilentlyContinue
+}
+
+# Kill process on port 3509 (Dapr HTTP port)
+$process = Get-NetTCPConnection -LocalPort 3509 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
+if ($process) {
+    Write-Host "Killing process on port 3509 (PID: $process)" -ForegroundColor Yellow
+    Stop-Process -Id $process -Force -ErrorAction SilentlyContinue
+}
+
+# Kill process on port 50009 (Dapr gRPC port)
+$process = Get-NetTCPConnection -LocalPort 50009 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
+if ($process) {
+    Write-Host "Killing process on port 50009 (PID: $process)" -ForegroundColor Yellow
+    Stop-Process -Id $process -Force -ErrorAction SilentlyContinue
+}
+
+Start-Sleep -Seconds 2
+
+Write-Host ""
+Write-Host "Starting with Dapr sidecar..." -ForegroundColor Green
+Write-Host "App ID: payment-service" -ForegroundColor Cyan
+Write-Host "App Port: 1009" -ForegroundColor Cyan
+Write-Host "Dapr HTTP Port: 3509" -ForegroundColor Cyan
+Write-Host "Dapr gRPC Port: 50009" -ForegroundColor Cyan
+Write-Host ""
+
+dapr run `
+  --app-id payment-service `
+  --app-port 1009 `
+  --dapr-http-port 3509 `
+  --dapr-grpc-port 50009 `
+  --log-level error `
+  --resources-path ./.dapr `
+  --config ./.dapr/config.yaml `
+  -- dotnet run --project PaymentService/PaymentService.csproj
+
+Write-Host ""
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "Service stopped." -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan

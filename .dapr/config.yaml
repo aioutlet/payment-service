@@ -3,14 +3,12 @@ kind: Configuration
 metadata:
   name: payment-service-config
 spec:
+  features:
+    - name: SchedulerReminders
+      enabled: false
   tracing:
     samplingRate: '1'
     otel:
-      endpointAddress: 'http://localhost:4318'
+      endpointAddress: 'localhost:4318'
       isSecure: false
       protocol: 'http'
-  metric:
-    enabled: true
-  accessControl:
-    defaultAction: allow
-    trustDomain: 'public'

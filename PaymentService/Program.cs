@@ -17,6 +17,9 @@ using PayPalProvider = PaymentService.Services.Providers.PayPalPaymentProvider;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure Kestrel to listen on port 1009
+builder.WebHost.UseUrls("http://0.0.0.0:1009");
+
 // Add services to the container.
 builder.Services.AddControllers()
     .AddDapr() // Add Dapr integration
@@ -74,7 +77,12 @@ builder.Services.Configure<PaymentProvidersSettings>(
 
 // Database
 builder.Services.AddDbContext<PaymentDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlServerOptions => sqlServerOptions.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(30),
+            errorNumbersToAdd: null)));
 
 // JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
@@ -168,6 +176,9 @@ app.MapSubscribeHandler();
 app.MapControllers();
 
 // Database migration and seeding
+// NOTE: Commented out due to SQL Server connection issues
+// Uncomment when SQL Server is properly configured
+/*
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
@@ -185,6 +196,7 @@ using (var scope = app.Services.CreateScope())
         throw;
     }
 }
+*/
 
 app.Logger.LogInformation("Payment Service started successfully");
 
