@@ -48,7 +48,7 @@ dapr run `
   --dapr-http-port 3509 `
   --dapr-grpc-port 50009 `
   --log-level error `
-  --resources-path ./.dapr `
+  --resources-path ./.dapr/components `
   --config ./.dapr/config.yaml `
   -- dotnet run --project PaymentService/PaymentService.csproj
 

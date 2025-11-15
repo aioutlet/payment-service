@@ -28,44 +28,23 @@ public class DaprSecretService
     {
         try
         {
-            // Split the secret name for nested keys (e.g., "jwt:secret" -> "jwt" with key "secret")
-            var parts = secretName.Split(':', 2);
-            var secretKey = parts[0];
-            var nestedKey = parts.Length > 1 ? parts[1] : null;
-
-            _logger.LogDebug("Retrieving secret: {SecretKey} (nested: {NestedKey}) from store: {StoreName}", 
-                secretKey, nestedKey ?? "none", SecretStoreName);
+            _logger.LogDebug("Retrieving secret: {SecretName} from store: {StoreName}", 
+                secretName, SecretStoreName);
 
             var secrets = await _daprClient.GetSecretAsync(
                 SecretStoreName,
-                secretKey,
+                secretName,
                 cancellationToken: cancellationToken);
 
             if (secrets == null || secrets.Count == 0)
             {
-                _logger.LogWarning("Secret not found: {SecretKey} in store: {StoreName}", secretKey, SecretStoreName);
+                _logger.LogWarning("Secret not found: {SecretName} in store: {StoreName}", secretName, SecretStoreName);
                 return null;
             }
 
-            _logger.LogDebug("Retrieved {Count} values for secret: {SecretKey}, keys: {Keys}", 
-                secrets.Count, secretKey, string.Join(", ", secrets.Keys));
-
-            // If nested key specified, look for it
-            if (nestedKey != null && secrets.ContainsKey(nestedKey))
-            {
-                _logger.LogDebug("Found nested key: {NestedKey} in secret: {SecretKey}", nestedKey, secretKey);
-                return secrets[nestedKey];
-            }
-
-            if (nestedKey != null)
-            {
-                _logger.LogWarning("Nested key {NestedKey} not found in secret {SecretKey}. Available keys: {Keys}", 
-                    nestedKey, secretKey, string.Join(", ", secrets.Keys));
-                return null;
-            }
-
-            // Otherwise return the first value
-            return secrets.FirstOrDefault().Value;
+            var value = secrets.FirstOrDefault().Value;
+            _logger.LogDebug("Successfully retrieved secret: {SecretName}", secretName);
+            return value;
         }
         catch (Exception ex)
         {
