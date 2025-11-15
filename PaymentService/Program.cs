@@ -20,6 +20,9 @@ var builder = WebApplication.CreateBuilder(args);
 // Configure Kestrel to listen on port 1009
 builder.WebHost.UseUrls("http://0.0.0.0:1009");
 
+// Add Dapr client for runtime secret access
+builder.Services.AddDaprClient();
+
 // Add services to the container.
 builder.Services.AddControllers()
     .AddDapr() // Add Dapr integration
@@ -75,32 +78,83 @@ builder.Services.Configure<PaymentSettings>(
 builder.Services.Configure<PaymentProvidersSettings>(
     builder.Configuration.GetSection("PaymentProviders"));
 
-// Database
-builder.Services.AddDbContext<PaymentDbContext>(options =>
+// Database - use lazy configuration with DaprSecretService
+builder.Services.AddDbContext<PaymentDbContext>((serviceProvider, options) =>
+{
+    var secretService = serviceProvider.GetRequiredService<DaprSecretService>();
+    var logger = serviceProvider.GetRequiredService<ILogger<PaymentDbContext>>();
+    
+    var connectionString = secretService.GetDatabaseConnectionStringAsync().GetAwaiter().GetResult();
+    
+    if (string.IsNullOrEmpty(connectionString))
+    {
+        logger.LogError("Database connection string not found in Dapr secrets");
+        throw new InvalidOperationException("Database connection string is required");
+    }
+    
     options.UseSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
+        connectionString,
         sqlServerOptions => sqlServerOptions.EnableRetryOnFailure(
             maxRetryCount: 5,
             maxRetryDelay: TimeSpan.FromSeconds(30),
-            errorNumbersToAdd: null)));
+            errorNumbersToAdd: null));
+});
 
-// JWT Authentication
-var jwtSettings = builder.Configuration.GetSection("Jwt");
-var key = Encoding.ASCII.GetBytes(jwtSettings["Key"] ?? throw new InvalidOperationException("JWT Key is required"));
+// JWT Authentication - use lazy configuration with DaprSecretService and caching
+builder.Services.AddSingleton<TokenValidationParameters>(serviceProvider =>
+{
+    // This will be resolved lazily when first needed
+    return null!; // Placeholder, will be set up properly in middleware
+});
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.TokenValidationParameters = new TokenValidationParameters
+        options.Events = new JwtBearerEvents
         {
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(key),
-            ValidateIssuer = true,
-            ValidIssuer = jwtSettings["Issuer"],
-            ValidateAudience = true,
-            ValidAudience = jwtSettings["Audience"],
-            ValidateLifetime = true,
-            ClockSkew = TimeSpan.Zero
+            OnMessageReceived = context =>
+            {
+                // Check if TokenValidationParameters is already configured
+                if (options.TokenValidationParameters?.IssuerSigningKey == null)
+                {
+                    // Lazy load JWT configuration from Dapr on first request
+                    var secretService = context.HttpContext.RequestServices.GetRequiredService<DaprSecretService>();
+                    var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                    
+                    try
+                    {
+                        var (jwtKey, jwtIssuer, jwtAudience) = secretService.GetJwtConfigAsync().GetAwaiter().GetResult();
+                        
+                        if (string.IsNullOrEmpty(jwtKey))
+                        {
+                            logger.LogError("JWT Key not found in Dapr secrets");
+                            throw new InvalidOperationException("JWT Key not found in Dapr secrets");
+                        }
+                        
+                        var key = Encoding.ASCII.GetBytes(jwtKey);
+                        options.TokenValidationParameters = new TokenValidationParameters
+                        {
+                            ValidateIssuerSigningKey = true,
+                            IssuerSigningKey = new SymmetricSecurityKey(key),
+                            ValidateIssuer = !string.IsNullOrEmpty(jwtIssuer),
+                            ValidIssuer = jwtIssuer,
+                            ValidateAudience = !string.IsNullOrEmpty(jwtAudience),
+                            ValidAudience = jwtAudience,
+                            ValidateLifetime = true,
+                            ClockSkew = TimeSpan.Zero
+                        };
+                        
+                        logger.LogInformation("JWT configuration loaded from Dapr secrets");
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Failed to load JWT configuration from Dapr");
+                        throw;
+                    }
+                }
+                
+                return Task.CompletedTask;
+            }
         };
     });
 

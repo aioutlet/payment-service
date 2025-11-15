@@ -10,7 +10,7 @@ public class DaprSecretService
 {
     private readonly DaprClient _daprClient;
     private readonly ILogger<DaprSecretService> _logger;
-    private const string SecretStoreName = "payment-secret-store";
+    private const string SecretStoreName = "local-secret-store";
 
     public DaprSecretService(DaprClient daprClient, ILogger<DaprSecretService> logger)
     {
@@ -33,7 +33,8 @@ public class DaprSecretService
             var secretKey = parts[0];
             var nestedKey = parts.Length > 1 ? parts[1] : null;
 
-            _logger.LogDebug("Retrieving secret: {SecretKey} from store: {StoreName}", secretKey, SecretStoreName);
+            _logger.LogDebug("Retrieving secret: {SecretKey} (nested: {NestedKey}) from store: {StoreName}", 
+                secretKey, nestedKey ?? "none", SecretStoreName);
 
             var secrets = await _daprClient.GetSecretAsync(
                 SecretStoreName,
@@ -42,14 +43,25 @@ public class DaprSecretService
 
             if (secrets == null || secrets.Count == 0)
             {
-                _logger.LogWarning("Secret not found: {SecretKey}", secretKey);
+                _logger.LogWarning("Secret not found: {SecretKey} in store: {StoreName}", secretKey, SecretStoreName);
                 return null;
             }
+
+            _logger.LogDebug("Retrieved {Count} values for secret: {SecretKey}, keys: {Keys}", 
+                secrets.Count, secretKey, string.Join(", ", secrets.Keys));
 
             // If nested key specified, look for it
             if (nestedKey != null && secrets.ContainsKey(nestedKey))
             {
+                _logger.LogDebug("Found nested key: {NestedKey} in secret: {SecretKey}", nestedKey, secretKey);
                 return secrets[nestedKey];
+            }
+
+            if (nestedKey != null)
+            {
+                _logger.LogWarning("Nested key {NestedKey} not found in secret {SecretKey}. Available keys: {Keys}", 
+                    nestedKey, secretKey, string.Join(", ", secrets.Keys));
+                return null;
             }
 
             // Otherwise return the first value

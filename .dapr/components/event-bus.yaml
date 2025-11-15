@@ -1,0 +1,33 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: event-bus
+spec:
+  type: pubsub.rabbitmq
+  version: v1
+  metadata:
+    - name: connectionString
+      value: 'amqp://admin:admin123@127.0.0.1:5672'
+    - name: consumerID
+      value: 'payment-service'
+    - name: durable
+      value: 'true'
+    - name: deletedWhenUnused
+      value: 'false'
+    - name: autoAck
+      value: 'false'
+    - name: deliveryMode
+      value: '2'
+    - name: requeueInFailure
+      value: 'true'
+    - name: prefetchCount
+      value: '10'
+    - name: reconnectWait
+      value: '5'
+    - name: concurrency
+      value: 'parallel'
+    - name: exchangeKind
+      value: 'topic'
+scopes:
+  - payment-service
+
