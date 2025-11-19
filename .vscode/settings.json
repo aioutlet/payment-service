@@ -1,0 +1,7 @@
+{
+    "github.copilot.chat.commitMessageGeneration.instructions": [
+        {
+            "text": "Be extremely detailed with the files changes and the reason for the changes. Add lots of emoji to make it more engaging! 🚀✨",
+        }
+    ]
+}
