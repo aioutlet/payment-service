@@ -4,7 +4,13 @@
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "Starting payment-service with Dapr..." -ForegroundColor Cyan
+#!/usr/bin/env pwsh
+# Run Payment Service with Dapr sidecar
+# Usage: .\run.ps1
+
+$Host.UI.RawUI.WindowTitle = "Payment Service"
+
+Write-Host "Starting Payment Service with Dapr..." -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 

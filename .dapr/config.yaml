@@ -6,6 +6,8 @@ spec:
   features:
     - name: SchedulerReminders
       enabled: false
+  scheduler:
+    enabled: false
   tracing:
     samplingRate: '1'
     otel:
