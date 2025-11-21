@@ -1,4 +1,3 @@
-using Dapr;
 using Dapr.Client;
 using Microsoft.AspNetCore.Mvc;
 using PaymentService.Events.Models;
@@ -34,7 +33,6 @@ public class OrderEventConsumer : ControllerBase
     /// Handle order.created event
     /// Process payment when a new order is created
     /// </summary>
-    [Topic("event-bus", "order.created")]
     [HttpPost("order-created")]
     public async Task<IActionResult> HandleOrderCreated([FromBody] OrderCreatedEvent orderEvent)
     {
@@ -119,7 +117,6 @@ public class OrderEventConsumer : ControllerBase
     /// Handle order.cancelled event
     /// Process refund when an order is cancelled
     /// </summary>
-    [Topic("event-bus", "order.cancelled")]
     [HttpPost("order-cancelled")]
     public async Task<IActionResult> HandleOrderCancelled([FromBody] OrderCancelledEvent orderEvent)
     {

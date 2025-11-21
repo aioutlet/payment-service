@@ -56,7 +56,7 @@ dapr run `
   --log-level error `
   --resources-path ./.dapr/components `
   --config ./.dapr/config.yaml `
-  -- dotnet run --project PaymentService/PaymentService.csproj
+  -- dotnet watch --project PaymentService/PaymentService.csproj
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan

@@ -59,22 +59,4 @@ public class DaprEventPublisher
             throw;
         }
     }
-
-    /// <summary>
-    /// Health check for Dapr connectivity
-    /// </summary>
-    public async Task<bool> IsHealthyAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            // Check Dapr health
-            await _daprClient.CheckHealthAsync(cancellationToken);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Dapr health check failed");
-            return false;
-        }
-    }
 }

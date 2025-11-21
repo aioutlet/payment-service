@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -31,9 +30,6 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
         options.JsonSerializerOptions.PropertyNamingPolicy = null; // Keep original property names
     });
-
-// Add rate limiting services
-builder.Services.AddRateLimitingServices(builder.Configuration);
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
@@ -73,8 +69,6 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // Configuration
-builder.Services.Configure<PaymentSettings>(
-    builder.Configuration.GetSection("PaymentSettings"));
 builder.Services.Configure<PaymentProvidersSettings>(
     builder.Configuration.GetSection("PaymentProviders"));
 
@@ -214,7 +208,6 @@ if (app.Environment.IsDevelopment())
 
 // Middleware pipeline
 app.UseTraceContext();
-app.UsePaymentServiceRateLimiting(builder.Configuration);
 app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
@@ -222,9 +215,8 @@ app.UseAuthorization();
 // Health checks mapped through operational controller
 // app.MapHealthChecks("/health"); // Replaced with operational controller
 
-// Enable Dapr CloudEvents and subscribe handler
+// Enable Dapr CloudEvents for publishing and subscribing
 app.UseCloudEvents();
-app.MapSubscribeHandler();
 
 // Controllers
 app.MapControllers();
